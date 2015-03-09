@@ -127,9 +127,17 @@ xlsxRead options bytes = do
     sharedStrings =      -- xl/sharedStrings.xml: <sst><si><t>STRING</t></si><si><t>STRING</t></si></sst>
       let selectSi cursor = cursor $// XML.laxElement "si" -- XML.laxElement - match element tag without namespace
           selectTChildContent cursor = cursor $// (XML.laxElement "t" >=> XML.child) &| XML.content
-      in do
-         cursor <- xmlCursor "xl/sharedStrings.xml"
-         return $ mconcat $ map (mconcat . selectTChildContent) (selectSi cursor)
+      in case xmlCursor "xl/sharedStrings.xml" of
+          Left _ -> return []   -- xl/sharedStrings.xml absent
+          Right cursor -> return $ mconcat $ map (mconcat . selectTChildContent) (selectSi cursor)
+
+    dateFormat1904 :: Bool
+    dateFormat1904 =
+      case xmlCursor "xl/workbook.xml" of
+       Left _ -> False
+       Right cursor -> case cursor $// XML.laxElement "workbookPr" &| XML.attribute "date1904" of
+         [["true"]] -> True
+         _ -> False
 
     styles :: Either Errors (NumberFormats, CellFormattingRecords)
     styles = do
@@ -144,11 +152,11 @@ xlsxRead options bytes = do
       sequenceEitherPair (mapM extractFormatAttrs numFmts, mapM makeFormattingRecord cellXfs)
 
     applyFormat :: Int -> Cell -> Either Errors Cell
-    -- applyFormat cellFormatId (CellFloat value) | trace ("applyFormat " ++ show cellFormatId ++ " " ++ show value) False = undefined
+    -- applyFormat cellFormatId (CellFloat value) | trace ("applyFormat " ++ show cellFormatId ++ " " ++ show value ++ " formats " ++ show styles) False = undefined
     applyFormat cellFormatId (CellFloat value) =
       findFormat cellFormatId >>= applyFormatCode value
       where
-        findFormat cellFormatId' | cellFormatId' > 0x32 = do -- custom format id
+        findFormat cellFormatId' | cellFormatId' >= 0 = do
           (numberFormats, cellFormattingRecords) <- styles
           case cellFormattingRecords !! cellFormatId' of
            CellFormattingUnknown -> return ""
@@ -156,19 +164,17 @@ xlsxRead options bytes = do
              case lookup fid numberFormats of
               Nothing -> return ""
               Just formatCode -> return $ T.toUpper formatCode
-        findFormat cellFormatId'
-          | cellFormatId' <= 0x0D && value > 39000.0 && value < 42000.0 = return "YYYY-MM-DD" -- for unclear reason Libre/Openoffice sometimes uses those formats for dates
-        findFormat cellFormatId' -- standard format ids for date and time (see table at the bottom)
-          | cellFormatId' >= 0x0E && cellFormatId' <= 0x16 = return "YYYY-MM-DD"
         findFormat _ = Right ""
     applyFormat _ cellValue = return cellValue
+
+    excelSerialDateToDay' = if dateFormat1904 then excelSerialDate1904ToDay else excelSerialDateToDay
 
     applyFormatCode :: Float -> T.Text -> Either Errors Cell
     -- applyFormatCode value formatCode | trace ("Format [" ++ show value ++ "] with code " ++ show formatCode) False = undefined
     applyFormatCode value formatCode
       | "YY" `T.isInfixOf` formatCode =
           -- trace ("applyFormatCode " ++ show (CellDate (excelSerialDateToDay value))) $
-          Right $ CellDate (excelSerialDateToDay value)
+          Right $ CellDate (excelSerialDateToDay' value)
     applyFormatCode value _ = Right $ CellFloat value
 
     expectSingleValue :: T.Text -> [a] -> Either Errors a
@@ -182,48 +188,5 @@ xlsxRead options bytes = do
        (Left e1, Right _) -> Left e1
        (Right _, Left e2) -> Left e2
        (Right a, Right b) -> Right (a, b)
-
-----------------------------------------------------------------------
-
-{-
-    # "std" == "standard for US English locale"
-    # See e.g. gnumeric-1.x.y/src/formats.c
-    0x00: "General",
-    0x01: "0",
-    0x02: "0.00",
-    0x03: "#,##0",
-    0x04: "#,##0.00",
-    0x05: "$#,##0_);($#,##0)",
-    0x06: "$#,##0_);[Red]($#,##0)",
-    0x07: "$#,##0.00_);($#,##0.00)",
-    0x08: "$#,##0.00_);[Red]($#,##0.00)",
-    0x09: "0%",
-    0x0a: "0.00%",
-    0x0b: "0.00E+00",
-    0x0c: "# ?/?",
-    0x0d: "# ??/??",
-    0x0e: "m/d/yy",
-    0x0f: "d-mmm-yy",
-    0x10: "d-mmm",
-    0x11: "mmm-yy",
-    0x12: "h:mm AM/PM",
-    0x13: "h:mm:ss AM/PM",
-    0x14: "h:mm",
-    0x15: "h:mm:ss",
-    0x16: "m/d/yy h:mm",
-    0x25: "#,##0_);(#,##0)",
-    0x26: "#,##0_);[Red](#,##0)",
-    0x27: "#,##0.00_);(#,##0.00)",
-    0x28: "#,##0.00_);[Red](#,##0.00)",
-    0x29: "_(* #,##0_);_(* (#,##0);_(* \"-\"_);_(@_)",
-    0x2a: "_($* #,##0_);_($* (#,##0);_($* \"-\"_);_(@_)",
-    0x2b: "_(* #,##0.00_);_(* (#,##0.00);_(* \"-\"??_);_(@_)",
-    0x2c: "_($* #,##0.00_);_($* (#,##0.00);_($* \"-\"??_);_(@_)",
-    0x2d: "mm:ss",
-    0x2e: "[h]:mm:ss",
-    0x2f: "mm:ss.0",
-    0x30: "##0.0E+0",
-    0x31: "@",
--}
 
 ----------------------------------------------------------------------

@@ -17,6 +17,12 @@ excelSerialDateToDay :: Float -> Day
 excelSerialDateToDay sdf =
   excelSerialDateIToDay (truncate sdf)
 
+excelSerialDate1904ToDay :: Float -> Day
+excelSerialDate1904ToDay sdf =
+  excelSerialDateI1904ToDay (truncate sdf)
+
+-- ----------------------------------------------------------------------
+
 excelSerialDateIToDay :: Int -> Day
 {- Excel/Lotus 123 have a bug with 29-02-1900. 1900 is not a leap year, but Excel/Lotus 123 think it is... -}
 excelSerialDateIToDay serialDate | serialDate == 60 = fromGregorian 1900 2 29
@@ -36,6 +42,10 @@ excelSerialDateIToDay serialDate =
       year = 100 * (n - 49) + i + l4;
   in
    fromGregorian (fromIntegral year) month day
+
+excelSerialDateI1904ToDay :: Int -> Day
+excelSerialDateI1904ToDay serialDate =
+  excelSerialDateIToDay (serialDate + 1462)
 
 {-
 void ExcelSerialDateToDMY(int serial_date, int* day, int* month, int* year)

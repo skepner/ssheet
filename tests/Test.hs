@@ -17,7 +17,12 @@ import Data.Ssheet
 
 main :: IO ()
 main =
-  mapM_ testIt [("tests/simple.xlsx", simpleExpected), ("tests/simple.xls", simpleExpected), ("tests/simple.csv", simpleExpectedCsv)]
+  mapM_ testIt [("tests/simple.xlsx", simpleExpected),
+                ("tests/simple.xls", simpleExpected),
+                ("tests/simple.csv", simpleExpectedCsv),
+                ("tests/dates.xlsx", datesExpected),
+                ("tests/dates1904.xlsx", dates1904Expected)
+                ]
   where
     testIt (source, expected) = testSimple source expected
 
@@ -50,5 +55,23 @@ simpleExpectedCsv = [Sheet "" (Map.fromList [(0,Map.fromList [(0,CellString "A1"
                                              (1,Map.fromList [(0,CellString "42")]),
                                              (2,Map.fromList [(0,CellString "42.42")]),
                                              (3,Map.fromList [(0,CellString "2014-12-16")])])]
+
+datesExpected :: Ssheet
+datesExpected = [Sheet "Sheet1" (Map.fromList [(0, Map.fromList  [(0, CellDate (fromGregorian 2015 3 8))]),
+                                               (1, Map.fromList  [(0, CellDate (fromGregorian 2015 3 8))]),
+                                               (2, Map.fromList  [(0, CellDate (fromGregorian 2015 3 8))]),
+                                               (3, Map.fromList  [(0, CellDate (fromGregorian 2015 3 8))]),
+                                               (4, Map.fromList  [(0, CellDate (fromGregorian 2015 3 8))]),
+                                               (5, Map.fromList  [(0, CellDate (fromGregorian 2015 3 8))]),
+                                               (6, Map.fromList  [(0, CellDate (fromGregorian 2015 3 8))]),
+                                               (7, Map.fromList  [(0, CellDate (fromGregorian 2015 3 8))]),
+                                               (8, Map.fromList  [(0, CellDate (fromGregorian 2015 3 8))]),
+                                               (9, Map.fromList  [(0, CellDate (fromGregorian 2015 3 8))]),
+                                               (10, Map.fromList [(0, CellDate (fromGregorian 2015 3 8))])])]
+
+dates1904Expected :: Ssheet
+dates1904Expected = [Sheet "Sheet1" (Map.fromList [(0, Map.fromList [(0, CellDate (fromGregorian 2014 10 15))]),
+                                                   (1, Map.fromList [(0, CellDate (fromGregorian 2014 10 15))])
+                                                  ])]
 
 ----------------------------------------------------------------------
