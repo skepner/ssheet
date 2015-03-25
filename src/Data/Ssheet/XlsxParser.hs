@@ -23,6 +23,8 @@ import qualified Codec.Archive.Zip as Zip
 import qualified Text.XML as XML
 import qualified Text.XML.Cursor as XML
 import Text.XML.Cursor (($//), (&|), (&//))
+import Text.Read (readMaybe)
+import Data.Maybe (fromMaybe)
 
 import qualified Data.Map.Lazy as Map
 
@@ -107,6 +109,8 @@ xlsxRead options bytes = do
              mkStringCell v = if T.null v then CellEmpty else CellString v
          in
           sharedStringIndex >>= (\index -> Right (ssheetTextsToCol r, mkStringCell (sharedStringsStripped !! index)))
+       (["str"], _, r) ->
+         return (ssheetTextsToCol r, extractStrCellValue column)
        ([], [cellFormatId], r) -> do
          value <- extractFormatCellValue column cellFormatId
          return (ssheetTextsToCol r, value)
@@ -120,7 +124,10 @@ xlsxRead options bytes = do
     extractFormatCellValue cell formatId =
       applyFormat (read (T.unpack formatId) :: Int) (extractCellValue cell)
     extractCellValue cell = case cell $// XML.laxElement "v" of
-                             [columnValue] -> CellFloat (read $ T.unpack $ head $ columnValue $// XML.content)
+                             [columnValue] -> CellFloat $ fromMaybe (-1.0) (readMaybe $ T.unpack $ head $ columnValue $// XML.content)
+                             _ -> CellEmpty
+    extractStrCellValue cell = case cell $// XML.laxElement "v" of
+                             [columnValue] -> CellString (head $ columnValue $// XML.content)
                              _ -> CellEmpty
 
     sharedStrings :: Either Errors [T.Text]
